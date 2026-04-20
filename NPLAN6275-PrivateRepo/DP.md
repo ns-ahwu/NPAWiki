@@ -318,6 +318,25 @@ npa-docker.netskope.com / npapublisher / netskopeprivateaccess / publisher_u22
 ```
 Both `REPO_NAME` (Cloudsmith repo) and `netskopeprivateaccess` (Docker Hub org) are required path segments.
 
+#### `fix_docker_ce_apt_source_for_private_repo()` — why docker.com is used during install
+
+During `install_docker_ce`, `add-apt-repository` creates `archive_uri-https_download_docker_com_linux_ubuntu-jammy.list` pointing to download.docker.com. docker-ce is then installed from that source (unavoidable on a cold-start machine with no pre-existing Docker). Immediately after, `fix_docker_ce_apt_source_for_private_repo` backs that file up to `.bak`.
+
+Final APT state is **identical to a wizard-enabled machine**:
+- `/etc/apt/sources.list.bak`
+- `/etc/apt/sources.list.d/archive_uri-https_download_docker_com_linux_ubuntu-jammy.list.bak`
+- `/etc/apt/sources.list.d/netskopenpa-npapublisher.list`
+
+All **future** `apt-get upgrade` (including docker-ce updates) will use Cloudsmith only. The one-time docker.com install is expected and matches how wizard-enabled machines were originally provisioned.
+
+Verified — `apt-get update` after full bootstrap shows only Cloudsmith sources:
+```
+Get:1 https://npa-repository.netskope.com/.../ubuntu jammy InRelease
+Get:2 https://npa-repository.netskope.com/.../ubuntu jammy-security InRelease
+Get:3 https://npa-repository.netskope.com/.../ubuntu jammy-updates InRelease
+Get:4 https://npa-repository.netskope.com/.../ubuntu jammy-backports InRelease
+```
+
 #### Known open issue — `docker ps` requires sudo after private-repo install
 
 When `docker_login_private_repo` runs as root with `HOME=/home/ubuntu` (set by provision_shared.sh), `docker login` writes credentials to `/home/ubuntu/.docker/config.json` **owned by root, mode 600**. When ubuntu user later runs `docker ps`, the Docker CLI hits permission denied on the config file. Fix (not yet implemented): `chown ubuntu:ubuntu /home/ubuntu/.docker/config.json` after `docker login`, or write directly to `/root/.docker/config.json`.
