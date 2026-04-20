@@ -266,11 +266,11 @@ Only these files should change:
 
 Files uploaded to `netskopenpa/bootstrap` (public, no token required):
 ```
-https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/bootstrap.sh
-https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/provision_shared.sh
-https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/cleanup.sh
-https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/npa-publisher.ubuntu.service
-https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/npa-publisher.centos.service
+https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/bootstrap.sh
+https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/provision_shared.sh
+https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/cleanup.sh
+https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/npa-publisher.ubuntu.service
+https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/npa-publisher.centos.service
 ```
 
 Upload script: `bakery_generic_onthely/upload_to_cloudsmith.sh` (checks CLI, auth, file presence; `--republish` to overwrite).
@@ -282,9 +282,9 @@ Upload script: `bakery_generic_onthely/upload_to_cloudsmith.sh` (checks CLI, aut
 curl -fsSL .../bootstrap.sh | sudo bash
 
 # Private repo (Cloudsmith) — pass token explicitly to sudo:
-curl -fsSL https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/bootstrap.sh \
+curl -fsSL https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0/bootstrap.sh \
   | sudo CLOUDSMITH_TOKEN="<token>" \
-        S3_PUBLISHER_GENERIC_PATH="https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0" \
+        S3_PUBLISHER_GENERIC_PATH="https://npa-repository.netskope.com/public/bootstrap/raw/versions/1.0.0" \
         bash
 ```
 
