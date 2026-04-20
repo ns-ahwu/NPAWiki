@@ -251,8 +251,88 @@ Only these files should change:
 |---|---|
 | ENG-952882 | System updates take longer when private repo enabled (larger package index from Cloudsmith) |
 | ENG-955137 | Publisher upgrade fails when `docker_domain` reachable but `dl_domain` blocked |
-| ENG-924234 | Still in Code Review — C++ observability PR #834 |
+| ENG-924234 | Merged (C++ observability PR #834) |
 | Phase 2 item | `dockerhelper.go:154` — check `UseChinaRegistry()` before private repo namespace |
+
+---
+
+## Phase 2 Progress
+
+### ENG-976617: Script-based install from Cloudsmith (PR #852, `npa_publisher`)
+
+**Goal:** Fresh Publisher installs should use Cloudsmith from day one — no S3, no Docker Hub — mirroring what `--enable_private_repo` does for existing machines.
+
+#### Cloudsmith public bootstrap repo
+
+Files uploaded to `netskopenpa/bootstrap` (public, no token required):
+```
+https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/bootstrap.sh
+https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/provision_shared.sh
+https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/cleanup.sh
+https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/npa-publisher.ubuntu.service
+https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/npa-publisher.centos.service
+```
+
+Upload script: `bakery_generic_onthely/upload_to_cloudsmith.sh` (checks CLI, auth, file presence; `--republish` to overwrite).
+
+#### Dual-support install command
+
+```bash
+# Standard (S3 / DockerHub) — default, unchanged:
+curl -fsSL .../bootstrap.sh | sudo bash
+
+# Private repo (Cloudsmith) — pass token explicitly to sudo:
+curl -fsSL https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0/bootstrap.sh \
+  | sudo CLOUDSMITH_TOKEN="<token>" \
+        S3_PUBLISHER_GENERIC_PATH="https://dl.cloudsmith.io/public/netskopenpa/bootstrap/raw/versions/1.0.0" \
+        bash
+```
+
+**IMPORTANT:** Must use `sudo CLOUDSMITH_TOKEN=... bash`, NOT `sudo bash`. Plain `sudo bash` strips env vars — the token never reaches `provision_shared.sh`. See below.
+
+#### `provision_shared.sh` additions
+
+| Function | When called | What it does |
+|---|---|---|
+| `is_private_repo()` | throughout | returns true only when `CLOUDSMITH_TOKEN` is explicitly exported |
+| `setup_private_repo()` | before `update_packages` | GPG keyring + APT sources + `private_repo_config.json` + `settings.json` |
+| `docker_login_private_repo()` | after `install_docker_ce` | `docker login` to register credentials with the running daemon |
+
+`PUBLISHER_REPO` switches to `${DOCKER_DOMAIN}/${REPO_NAME}/netskopeprivateaccess/publisher_u22` when private repo is enabled. `load_publisher_image` uses `docker pull` directly (not `sg docker`) in this path.
+
+#### Key design decisions
+
+**Why `docker login` after `install_docker_ce` (not manual `config.json` write before):**
+Docker 29+ with containerd requires credentials to be registered via the daemon API on first run. Writing `/root/.docker/config.json` before Docker is installed is ignored by containerd's credential resolver on first pull. `docker login` makes the proper API call after the daemon is up.
+
+**Why `docker pull` directly (not `sg docker`) for private repo:**
+The bootstrap runs as root (`sudo CLOUDSMITH_TOKEN=... bash`). Root has unconditional Docker socket access — no group membership needed. `sg docker` would change HOME to `/home/ubuntu`, making the Docker client look for credentials in `/home/ubuntu/.docker/config.json` (wrong location). Running `docker pull` as root reads from `/root/.docker/config.json` — same as `sudo ./npa_publisher_wizard`.
+
+**Why `sudo CLOUDSMITH_TOKEN=... bash` not `sudo bash`:**
+`sudo` strips environment variables by default. `sudo VAR=val bash` passes the variable directly to the sudo invocation — not as inheritance, but as part of the command. This is why `export` in the parent shell isn't enough.
+
+**Docker image path in Cloudsmith:**
+```
+npa-docker.netskope.com / <repo_name> / <docker_hub_namespace> / <image>
+npa-docker.netskope.com / npapublisher / netskopeprivateaccess / publisher_u22
+```
+Both `REPO_NAME` (Cloudsmith repo) and `netskopeprivateaccess` (Docker Hub org) are required path segments.
+
+#### Known open issue — `docker ps` requires sudo after private-repo install
+
+When `docker_login_private_repo` runs as root with `HOME=/home/ubuntu` (set by provision_shared.sh), `docker login` writes credentials to `/home/ubuntu/.docker/config.json` **owned by root, mode 600**. When ubuntu user later runs `docker ps`, the Docker CLI hits permission denied on the config file. Fix (not yet implemented): `chown ubuntu:ubuntu /home/ubuntu/.docker/config.json` after `docker login`, or write directly to `/root/.docker/config.json`.
+
+#### RHEL
+
+RHEL is not yet supported for private repo install. If `CLOUDSMITH_TOKEN` is exported on RHEL, a graceful warning is printed and installation continues using standard public repos.
+
+#### Verified
+
+Full bootstrap flow tested end-to-end on AWS Ubuntu 22.04 (ENG-976617 stack):
+- APT fetches from `npa-repository.netskope.com` only (zero ubuntu.com/AWS mirror traffic)
+- Docker image pulled from `npa-docker.netskope.com/npapublisher/netskopeprivateaccess/publisher_u22`
+- Publisher container running after install
+- `NPA publisher installation succeeded`
 
 ---
 
