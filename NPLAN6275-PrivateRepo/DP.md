@@ -24,6 +24,22 @@
 | `nsconfighelper/nsconfighelper.go` | Reads `enable_private_repo` FF from `nsconfig.json` |
 | `dockerhelper/dockerhelper.go` | Docker image pull path switch (private vs public namespace) |
 
+### Package Import Graph
+
+```mermaid
+graph LR
+    upgradehelper --> privaterepo
+    upgradehelper --> dockerhelper
+    upgradehelper --> exechelper
+    upgradehelper --> settingshelper
+
+    privaterepo --> exechelper
+    privaterepo --> filehelper
+    privaterepo --> loghelper
+    privaterepo --> settingshelper
+    privaterepo --> utils
+```
+
 ### `npa_publisher` (C++) — observability
 
 | Path | Role |
